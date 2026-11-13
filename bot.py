@@ -17,7 +17,7 @@ dp = Dispatcher()
 def get_db():
     return sqlite3.connect('bot_database.db')
 
-# Tilni tanlash menyusi
+# Tilni tanlash menyusi (/start)
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -32,14 +32,11 @@ async def cmd_start(message: types.Message):
         reply_markup=kb
     )
 
-# Til tanlangandan keyingi asosiy menyu
-@dp.callback_query(F.data.startswith("lang_"))
-async def set_language(callback: types.CallbackQuery):
-    lang = callback.data.split("_")[1]
-    
+# Asosiy menyuni chiqaruvchi yordamchi funksiya
+async def get_main_menu(user_id, lang):
     if lang == "uz":
         text = (
-            f"👋 Assalomu alaykum, <b>{callback.from_user.first_name}</b>!\n\n"
+            f"👋 Assalomu alaykum!\n\n"
             "🎮 <b>Ultimate Donat Bot</b>ga xush kelibsiz. O'yinlar, Telegram xizmatlari va NFT'larni eng qulay narxlarda xarid qiling.\n\n"
             "Do'konni ochish uchun pastdagi tugmani bosing:"
         )
@@ -49,7 +46,7 @@ async def set_language(callback: types.CallbackQuery):
         btn_admin = "⚙️ Admin Panel"
     elif lang == "ru":
         text = (
-            f"👋 Здравствуйте, <b>{callback.from_user.first_name}</b>!\n\n"
+            f"👋 Здравствуйте!\n\n"
             "🎮 Добро пожаловать в <b>Ultimate Donat Bot</b>. Покупайте игры, Telegram-услуги и NFT по выгодным ценам.\n\n"
             "Нажмите кнопку ниже, чтобы открыть магазин:"
         )
@@ -59,7 +56,7 @@ async def set_language(callback: types.CallbackQuery):
         btn_admin = "⚙️ Админ панель"
     else:
         text = (
-            f"👋 Hello, <b>{callback.from_user.first_name}</b>!\n\n"
+            f"👋 Hello!\n\n"
             "🎮 Welcome to <b>Ultimate Donat Bot</b>. Buy games, Telegram services, and NFTs at the best prices.\n\n"
             "Click the button below to open the shop:"
         )
@@ -70,16 +67,25 @@ async def set_language(callback: types.CallbackQuery):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=btn_shop, web_app=WebAppInfo(url="https://sizning-sayt.uz/webapp/index.html"))],
-        [InlineKeyboardButton(text=btn_orders, callback_data="my_orders"), InlineKeyboardButton(text=btn_help, callback_data="help")]
+        [InlineKeyboardButton(text=btn_orders, callback_data=f"orders_{lang}"), InlineKeyboardButton(text=btn_help, callback_data=f"help_{lang}")]
     ])
     
-    if callback.from_user.id in config.ADMIN_IDS:
-        kb.inline_keyboard.append([InlineKeyboardButton(text=btn_admin, callback_data="admin_panel")])
+    if user_id in config.ADMIN_IDS:
+        kb.inline_keyboard.append([InlineKeyboardButton(text=btn_admin, callback_data=f"admin_{lang}")])
 
+    return text, kb
+
+# Til tanlanganda
+@dp.callback_query(F.data.startswith("lang_"))
+async def set_language(callback: types.CallbackQuery):
+    lang = callback.data.split("_")[1]
+    text, kb = await get_main_menu(callback.from_user.id, lang)
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
-@dp.callback_query(F.data == "my_orders")
+# Buyurtmalarim bo'limi
+@dp.callback_query(F.data.startswith("orders_"))
 async def my_orders_handler(callback: types.CallbackQuery):
+    lang = callback.data.split("_")[1]
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -89,43 +95,81 @@ async def my_orders_handler(callback: types.CallbackQuery):
         orders = []
     conn.close()
 
-    if not orders:
-        text = "📦 Sizda hali buyurtmalar yo'q. / У вас пока нет заказов. / You have no orders yet."
+    if lang == "uz":
+        if not orders:
+            text = "📦 Sizda hali buyurtmalar yo'q."
+        else:
+            text = "📦 **Sizning buyurtmalaringiz:**\n\n"
+            for o in orders:
+                text += f"• ID: {o[0]} | Summa: {o[1]} so'm | Holati: {o[2]}\n"
+        back_text = "🔙 Orqaga"
+    elif lang == "ru":
+        if not orders:
+            text = "📦 У вас пока нет заказов."
+        else:
+            text = "📦 **Ваши заказы:**\n\n"
+            for o in orders:
+                text += f"• ID: {o[0]} | Сумма: {o[1]} сум | Статус: {o[2]}\n"
+        back_text = "🔙 Назад"
     else:
-        text = "📦 **Sizning buyurtmalaringiz / Ваши заказы / Your Orders:**\n\n"
-        for o in orders:
-            text += f"• ID: {o[0]} | Summa: {o[1]} so'm | Holati: {o[2]}\n"
+        if not orders:
+            text = "📦 You have no orders yet."
+        else:
+            text = "📦 **Your Orders:**\n\n"
+            for o in orders:
+                text += f"• ID: {o[0]} | Amount: {o[1]} UZS | Status: {o[2]}\n"
+        back_text = "🔙 Back"
 
-    await callback.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga / Назад / Back", callback_data="back_home")]]),
-        parse_mode="Markdown"
-    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=back_text, callback_data=f"back_to_main_{lang}")]])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
 
-@dp.callback_query(F.data == "help")
+# Yordam bo'limi
+@dp.callback_query(F.data.startswith("help_"))
 async def help_handler(callback: types.CallbackQuery):
-    await callback.message.edit_text(
-        "ℹ️ **Yordam markazi / Центр помощи / Help Center**\n\n"
-        "Botdan foydalanishda muammo yuzaga kelsa, adminga murojaat qiling:\n"
-        "📞 Admin: @eveline_00",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga / Назад / Back", callback_data="back_home")]]),
-        parse_mode="Markdown"
-    )
+    lang = callback.data.split("_")[1]
+    
+    if lang == "uz":
+        text = (
+            "ℹ️ **Yordam markazi**\n\n"
+            "Botdan foydalanishda muammo yuzaga kelsa, adminga murojaat qiling:\n"
+            "📞 Admin: @evelineee_00"
+        )
+        back_text = "🔙 Orqaga"
+    elif lang == "ru":
+        text = (
+            "ℹ️ **Центр помощи**\n\n"
+            "Если у вас возникли проблемы, обратитесь к администратору:\n"
+            "📞 Админ: @evelineee_00"
+        )
+        back_text = "🔙 Назад"
+    else:
+        text = (
+            "ℹ️ **Help Center**\n\n"
+            "If you have any issues, please contact the admin:\n"
+            "📞 Admin: @evelineee_00"
+        )
+        back_text = "🔙 Back"
 
-@dp.callback_query(F.data == "admin_panel")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=back_text, callback_data=f"back_to_main_{lang}")]])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+
+# Admin panel
+@dp.callback_query(F.data.startswith("admin_"))
 async def admin_panel(callback: types.CallbackQuery):
     if callback.from_user.id not in config.ADMIN_IDS:
         return await callback.answer("Siz admin emassiz!", show_alert=True)
 
+    lang = callback.data.split("_")[1]
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin_broadcast")],
-        [InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="back_home")]
+        [InlineKeyboardButton(text="📊 Statistika", callback_data=f"admin_stats_{lang}")],
+        [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data=f"admin_broadcast_{lang}")],
+        [InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data=f"back_to_main_{lang}")]
     ])
     await callback.message.edit_text("⚙️ <b>Admin Panel</b>\nKerakli bo'limni tanlang:", reply_markup=kb, parse_mode="HTML")
 
-@dp.callback_query(F.data == "admin_stats")
+@dp.callback_query(F.data.startswith("admin_stats_"))
 async def admin_stats(callback: types.CallbackQuery):
+    lang = callback.data.split("_")[1]
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -138,32 +182,25 @@ async def admin_stats(callback: types.CallbackQuery):
         total_sum = 0
     conn.close()
 
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]])
     await callback.message.edit_text(
         f"📊 <b>Statistika:</b>\n\n"
         f"• Jami buyurtmalar: {total_orders}\n"
         f"• Muvaffaqiyatli savdo: {total_sum:,.0f} so'm",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Qaytish", callback_data="admin_panel")]]),
+        reply_markup=kb,
         parse_mode="HTML"
     )
 
-@dp.callback_query(F.data == "admin_broadcast")
+@dp.callback_query(F.data.startswith("admin_broadcast_"))
 async def admin_broadcast(callback: types.CallbackQuery):
     await callback.answer("Broadcast xizmati tez orada qo'shiladi!", show_alert=True)
 
-@dp.callback_query(F.data == "back_home")
-async def back_home(callback: types.CallbackQuery):
-    # Asosiy menyuga qaytish uchun yana til tanlashga yuboramiz
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data="lang_uz"),
-            InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_ru"),
-            InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_en")
-        ]
-    ])
-    await callback.message.edit_text(
-        "🌐 Tilni tanlang / Выберите язык / Select language:",
-        reply_markup=kb
-    )
+# Ichki bo'limlardan to'g'ridan-to'g'ri til tanlash menyusiga emas, balki o'sha tilning asosiy menyusiga qaytish
+@dp.callback_query(F.data.startswith("back_to_main_"))
+async def back_to_main(callback: types.CallbackQuery):
+    lang = callback.data.split("_")[3]
+    text, kb = await get_main_menu(callback.from_user.id, lang)
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 # --- Render uchun veb-server qismi ---
 async def handle(request):
@@ -189,4 +226,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-                               
+    
