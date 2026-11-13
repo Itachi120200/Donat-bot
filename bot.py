@@ -3,6 +3,7 @@ import logging
 import sqlite3
 from os import getenv
 from aiohttp import web
+import aiohttp
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -195,7 +196,7 @@ async def process_payment_decision(callback: types.CallbackQuery):
     if action == "approve":
         amount = int(parts[2]) if len(parts) > 2 else 10000
         update_user_balance(target_user_id, amount)
-        await bot.send_message(target_user_id, f"✅ To'lovingiz tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
+                await bot.send_message(target_user_id, f"✅ To'lovingiz tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
         await callback.message.edit_caption(caption=callback.message.caption + f"\n\n<b>STATUS: TASDIQLANDI (+{amount:,} so'm) ✅</b>", parse_mode="HTML")
     else:
         await bot.send_message(target_user_id, "❌ Chekingiz rad etildi.")
@@ -298,16 +299,22 @@ async def back_to_main_menu(callback: types.CallbackQuery):
     await callback.answer()
 
 async def handle_ping(request):
-    return web.Response(text="<html><body><h1>🎮 Ultimate Donat Bot Shop</h1></body></html>", content_type='text/html')
+    try:
+        return aiohttp.web.FileResponse('index.html')
+    except Exception:
+        return web.Response(text="Do'kon sahifasi yuklanmoqda...", content_type='text/html')
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get("/", handle_ping)
+    app.router.add_get("/shop", handle_ping)
+    
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(getenv("PORT", 8080))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
+    logger.info(f"Web server {port}-portda ishga tushdi.")
 
 async def main():
     init_db()
@@ -319,5 +326,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        pass
-    
+        pass  
