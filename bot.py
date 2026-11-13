@@ -34,6 +34,40 @@ async def cmd_start(message: types.Message):
         parse_mode="HTML"
     )
 
+@dp.callback_query(F.data == "my_orders")
+async def my_orders_handler(callback: types.CallbackQuery):
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, amount, status FROM orders WHERE user_id = ?", (callback.from_user.id,))
+        orders = cursor.fetchall()
+    except sqlite3.OperationalError:
+        orders = []
+    conn.close()
+
+    if not orders:
+        text = "📦 Sizda hali buyurtmalar yo'q."
+    else:
+        text = "📦 **Sizning buyurtmalaringiz:**\n\n"
+        for o in orders:
+            text += f"• ID: {o[0]} | Summa: {o[1]} so'm | Holati: {o[2]}\n"
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Qaytish", callback_data="back_home")]]),
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(F.data == "help")
+async def help_handler(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "ℹ️ **Yordam markazi**\n\n"
+        "Botdan foydalanishda muammo yuzaga kelsa yoki savollaringiz bo'lsa, adminlarimizga murojaat qiling:\n"
+        "📞 Admin bilan bog'lanish",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Qaytish", callback_data="back_home")]]),
+        parse_mode="Markdown"
+    )
+
 @dp.callback_query(F.data == "admin_panel")
 async def admin_panel(callback: types.CallbackQuery):
     if callback.from_user.id not in config.ADMIN_IDS:
@@ -50,10 +84,14 @@ async def admin_panel(callback: types.CallbackQuery):
 async def admin_stats(callback: types.CallbackQuery):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM orders")
-    total_orders = cursor.fetchone()[0]
-    cursor.execute("SELECT SUM(amount) FROM orders WHERE status='bajarildi'")
-    total_sum = cursor.fetchone()[0] or 0
+    try:
+        cursor.execute("SELECT COUNT(*) FROM orders")
+        total_orders = cursor.fetchone()[0]
+        cursor.execute("SELECT SUM(amount) FROM orders WHERE status='bajarildi'")
+        total_sum = cursor.fetchone()[0] or 0
+    except sqlite3.OperationalError:
+        total_orders = 0
+        total_sum = 0
     conn.close()
 
     await callback.message.edit_text(
@@ -63,6 +101,10 @@ async def admin_stats(callback: types.CallbackQuery):
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Qaytish", callback_data="admin_panel")]]),
         parse_mode="HTML"
     )
+
+@dp.callback_query(F.data == "admin_broadcast")
+async def admin_broadcast(callback: types.CallbackQuery):
+    await callback.answer("Broadcast xizmati tez orada qo'shiladi!", show_alert=True)
 
 @dp.callback_query(F.data == "back_home")
 async def back_home(callback: types.CallbackQuery):
@@ -86,7 +128,6 @@ async def web_server():
 async def main():
     init_db()
     print("Bot ishga tushdi...")
-    # Veb-server va Telegram botni birga ishga tushiramiz
     await asyncio.gather(
         web_server(),
         dp.start_polling(bot)
