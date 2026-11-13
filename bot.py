@@ -5,7 +5,7 @@ from os import getenv
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, FSInputFile
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 import config
 
@@ -22,7 +22,7 @@ bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
 # ===========================================================================
-# 2-QISM: BAZANI INITSIALIZATSIYA QILISH VA KENGAYTIRISH
+# 2-QISM: BAZANI INITSIALIZATSIYA QILISH
 # ===========================================================================
 def init_db():
     conn = sqlite3.connect('bot_database.db')
@@ -84,8 +84,15 @@ def get_user_balance(user_id: int) -> int:
     conn.close()
     return res[0] if res else 0
 
+def update_user_balance(user_id: int, amount: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+    conn.commit()
+    conn.close()
+
 # ===========================================================================
-# 3-QISM: START BUYRUQ VA TIL TANLASH
+# 3-QISM: START BUYrug'i
 # ===========================================================================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -120,7 +127,7 @@ async def get_main_menu(user_id: int, lang: str):
         text = (
             f"👋 Assalomu alaykum!\n\n"
             f"💰 **Sizning balansingiz:** <code>{balance:,} so'm</code>\n\n"
-            "🎮 <b>Ultimate Donat Bot</b>ga xush kelibsiz. O'yinlar, Telegram xizmatlari va NFT'larni eng qulay narxlarda xarid qiling.\n\n"
+            "🎮 <b>Ultimate Donat Bot</b>ga xush kelibsiz. O'yinlar va xizmatlarni xarid qiling.\n\n"
             "📦 Buyurtma berish uchun pastdagi Mini App do'konidan foydalaning:"
         )
         btn_shop = "🛒 Do'konni ochish (Mini App)"
@@ -133,7 +140,7 @@ async def get_main_menu(user_id: int, lang: str):
         text = (
             f"👋 Здравствуйте!\n\n"
             f"💰 **Ваш баланс:** <code>{balance:,} сум</code>\n\n"
-            "🎮 Добро пожаловать в <b>Ultimate Donat Bot</b>. Покупайте игры, Telegram-услуги и NFT по выгодным ценам.\n\n"
+            "🎮 Добро пожаловать в <b>Ultimate Donat Bot</b>. Покупайте игры и услуги.\n\n"
             "📦 Используйте магазин Mini App ниже для заказа:"
         )
         btn_shop = "🛒 Открыть магазин (Mini App)"
@@ -146,7 +153,7 @@ async def get_main_menu(user_id: int, lang: str):
         text = (
             f"👋 Hello!\n\n"
             f"💰 **Your Balance:** <code>{balance:,} UZS</code>\n\n"
-            "🎮 Welcome to <b>Ultimate Donat Bot</b>. Buy games, Telegram services, and NFTs at the best prices.\n\n"
+            "🎮 Welcome to <b>Ultimate Donat Bot</b>.\n\n"
             "📦 Use the Mini App store below to place an order:"
         )
         btn_shop = "🛒 Open Shop (Mini App)"
@@ -201,7 +208,7 @@ async def topup_handler(callback: types.CallbackQuery):
             f"<code>{config.CARD_NUMBER}</code>\n"
             f"Karta egasi: <b>{config.CARD_HOLDER}</b>\n\n"
             "2. Pulni o'tkazgach, chek rasmini shu botga yuboring.\n"
-            "3. Admin tekshirgach, balansingiz avtomatik qo'shiladi!"
+            "3. Admin tekshirgach, balansingizga pul qo'shiladi!"
         )
         back_text = "🔙 Orqaga"
     elif lang == "ru":
@@ -210,7 +217,7 @@ async def topup_handler(callback: types.CallbackQuery):
             f"1. Переведите нужную сумму на карту:\n"
             f"<code>{config.CARD_NUMBER}</code>\n"
             f"Владелец: <b>{config.CARD_HOLDER}</b>\n\n"
-            "2. После отправки отправьте скриншот чека в этот бот.\n"
+            "2. Отправьте скриншот чека в этот бот.\n"
             "3. После проверки администратором баланс обновится!"
         )
         back_text = "🔙 Назад"
@@ -243,12 +250,16 @@ async def handle_receipt_photo(message: types.Message):
         f"📥 **Yangi to'lov cheki keldi!**\n\n"
         f"• Foydalanuvchi: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
         f"• Username: @{user.username or 'yoq'}\n"
-        f"• ID: <code>{user.id}</code>"
+        f"• ID: <code>{user.id}</code>\n\n"
+        f"<i>Balansga qo'shish uchun summa kiriting yoki tasdiqlang:</i>"
     )
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_{user.id}"),
+            InlineKeyboardButton(text="✅ Tasdiqlash (+10,000)", callback_data=f"approve_{user.id}_10000"),
+            InlineKeyboardButton(text="✅ (+50,000)", callback_data=f"approve_{user.id}_50000")
+        ],
+        [
             InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{user.id}")
         ]
     ])
@@ -270,12 +281,15 @@ async def process_payment_decision(callback: types.CallbackQuery):
         await callback.answer("Huquqingiz yo'q!", show_alert=True)
         return
         
-    action, target_user_id = callback.data.split("_")
-    target_user_id = int(target_user_id)
+    parts = callback.data.split("_")
+    action = parts[0]
+    target_user_id = int(parts[1])
     
     if action == "approve":
-        await bot.send_message(target_user_id, "✅ Sizning to'lovingiz admin tomonidan tasdiqlandi va balansingizga qo'shildi!")
-        await callback.message.edit_caption(caption=callback.message.caption + "\n\n<b>STATUS: TASDIQLANDI ✅</b>", parse_mode="HTML")
+        amount = int(parts[2]) if len(parts) > 2 else 10000
+        update_user_balance(target_user_id, amount)
+        await bot.send_message(target_user_id, f"✅ To'lovingiz admin tomonidan tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
+        await callback.message.edit_caption(caption=callback.message.caption + f"\n\n<b>STATUS: TASDIQLANDI (+{amount:,} so'm) ✅</b>", parse_mode="HTML")
     else:
         await bot.send_message(target_user_id, "❌ Siz yuborgan to'lov cheki rad etildi. Iltimos, admin bilan bog'laning: @evelineee_00")
         await callback.message.edit_caption(caption=callback.message.caption + "\n\n<b>STATUS: RAD ETILDI ❌</b>", parse_mode="HTML")
@@ -299,28 +313,19 @@ async def my_orders_handler(callback: types.CallbackQuery):
         conn.close()
 
     if lang == "uz":
-        if not orders:
-            text = "📦 Sizda hozircha faol buyurtmalar mavjud emas."
-        else:
-            text = "📦 **Sizning barcha buyurtmalaringiz:**\n\n"
-            for o in orders:
-                text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} so'm | Holati: <b>{o[3]}</b>\n"
+        text = "📦 **Sizning buyurtmalaringiz:**\n\n" if orders else "📦 Sizda hozircha faol buyurtmalar mavjud emas."
+        for o in orders:
+            text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} so'm | <b>{o[3]}</b>\n"
         back_text = "🔙 Orqaga"
     elif lang == "ru":
-        if not orders:
-            text = "📦 У вас пока нет активных заказов."
-        else:
-            text = "📦 **Ваши заказы:**\n\n"
-            for o in orders:
-                text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} сум | Статус: <b>{o[3]}</b>\n"
+        text = "📦 **Ваши заказы:**\n\n" if orders else "📦 У вас пока нет активных заказов."
+        for o in orders:
+            text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} сум | <b>{o[3]}</b>\n"
         back_text = "🔙 Назад"
     else:
-        if not orders:
-            text = "📦 You have no active orders yet."
-        else:
-            text = "📦 **Your Orders:**\n\n"
-            for o in orders:
-                text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} UZS | Status: <b>{o[3]}</b>\n"
+        text = "📦 **Your Orders:**\n\n" if orders else "📦 You have no active orders yet."
+        for o in orders:
+            text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} UZS | <b>{o[3]}</b>\n"
         back_text = "🔙 Back"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -337,31 +342,13 @@ async def help_handler(callback: types.CallbackQuery):
     lang = callback.data.split("_")[1]
     
     if lang == "uz":
-        text = (
-            "ℹ️ **Yordam va Qo'llab-quvvatlash markazi**\n\n"
-            "To'lov qilishda muammo yuzaga kelsa yoki buyurtmangiz vaqtida kelmasa, "
-            "darhol rasmiy adminimizga murojaat qiling:\n\n"
-            "📞 **Admin bilan bog'lanish:** @evelineee_00\n"
-            "⏰ Ish vaqti: 24/7 rejimida."
-        )
+        text = "ℹ️ **Yordam markazi**\n\nMuammolar bo'yicha murojaat qiling:\n📞 @eveline_00"
         back_text = "🔙 Orqaga"
     elif lang == "ru":
-        text = (
-            "ℹ️ **Центр помощи и поддержки**\n\n"
-            "Если у вас возникли проблемы с оплатой или заказ задерживается, "
-            "немедленно обратитесь к нашему администратору:\n\n"
-            "📞 **Связь с админом:** @evelineee_00\n"
-            "⏰ Режим работы: 24/7."
-        )
+        text = "ℹ️ **Центр помощи**\n\nОбратитесь к администратору:\n📞 @evelineee_00"
         back_text = "🔙 Назад"
     else:
-        text = (
-            "ℹ️ **Help & Support Center**\n\n"
-            "If you experience any issues with payments or your order is delayed, "
-            "please contact our administrator immediately:\n\n"
-            "📞 **Contact Admin:** @evelineee_00\n"
-            "⏰ Working hours: 24/7."
-        )
+        text = "ℹ️ **Help Center**\n\nContact admin:\n📞 @evelineee_00"
         back_text = "🔙 Back"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -378,34 +365,13 @@ async def prices_handler(callback: types.CallbackQuery):
     lang = callback.data.split("_")[1]
     
     if lang == "uz":
-        text = (
-            "💰 **Xizmatlar va O'yinlar Narxnomasi:**\n\n"
-            "• Telegram Premium (1 oy) — 40,000 so'm\n"
-            "• Telegram Premium (1 yil) — 300,000 so'm\n"
-            "• UC (PUBG Mobile) — Kelishilgan holda\n"
-            "• Stars (Telegram yulduzlari) — Arzon narxlarda\n\n"
-            "Batafsil ma'lumot Mini App do'konida joylashgan!"
-        )
+        text = "💰 **Narxnoma:**\n\n• Telegram Premium (1 oy) — 40,000 so'm\n• Telegram Premium (1 yil) — 300,000 so'm"
         back_text = "🔙 Orqaga"
     elif lang == "ru":
-        text = (
-            "💰 **Прайс-лист услуг и игр:**\n\n"
-            "• Telegram Premium (1 месяц) — 40,000 сум\n"
-            "• Telegram Premium (1 год) — 300,000 сум\n"
-            "• UC (PUBG Mobile) — По договоренности\n"
-            "• Stars (Telegram звезды) — По доступным ценам\n\n"
-            "Подробная информация в магазине Mini App!"
-        )
+        text = "💰 **Прайс-лист:**\n\n• Telegram Premium (1 мес) — 40,000 сум"
         back_text = "🔙 Назад"
     else:
-        text = (
-            "💰 **Services & Games Price List:**\n\n"
-            "• Telegram Premium (1 month) — 40,000 UZS\n"
-            "• Telegram Premium (1 year) — 300,000 UZS\n"
-            "• UC (PUBG Mobile) — Negotiable\n"
-            "• Stars (Telegram stars) — Best rates\n\n"
-            "More details available in the Mini App store!"
-        )
+        text = "💰 **Price List:**\n\n• Telegram Premium (1 mo) — 40,000 UZS"
         back_text = "🔙 Back"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -420,75 +386,71 @@ async def prices_handler(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("admin_"))
 async def admin_panel_handler(callback: types.CallbackQuery):
     if callback.from_user.id not in config.ADMIN_IDS:
-        await callback.answer("Sizda bu bo'limga kirish huquqi yo'q!", show_alert=True)
+        await callback.answer("Huquqingiz yo'q!", show_alert=True)
         return
 
-    lang = callback.data.split("_")[1]
+    data_parts = callback.data.split("_")
+    lang = data_parts[-1] # oxirgi qism tilni bildiradi
+
+    if callback.data.startswith("admin_stats_"):
+        conn = get_db()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM orders")
+            total_orders = cursor.fetchone()[0]
+            cursor.execute("SELECT SUM(amount) FROM orders")
+            total_sum = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT SUM(balance) FROM users")
+            total_balance = cursor.fetchone()[0] or 0
+        except sqlite3.OperationalError:
+            total_orders, total_sum, total_balance = 0, 0, 0
+        finally:
+            conn.close()
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]
+        ])
+        await callback.message.edit_text(
+            f"📊 <b>Bot Statistikasi:</b>\n\n"
+            f"• Jami buyurtmalar: <b>{total_orders} ta</b>\n"
+            f"• Jami summa: <b>{total_sum:,.0f} so'm</b>\n"
+            f"• Foydalanuvchilar balansi jami: <b>{total_balance:,.0f} so'm</b>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    if callback.data.startswith("admin_users_"):
+        conn = get_db()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM users")
+            total_users = cursor.fetchone()[0]
+        except sqlite3.OperationalError:
+            total_users = 1
+        finally:
+            conn.close()
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]
+        ])
+        await callback.message.edit_text(
+            f"👥 <b>Foydalanuvchilar:</b>\n\n"
+            f"• Botdan foydalanayotganlar: <b>{total_users} ta</b>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    # Asosiy admin menyu
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Statistika", callback_data=f"admin_stats_{lang}")],
         [InlineKeyboardButton(text="👥 Foydalanuvchilar soni", callback_data=f"admin_users_{lang}")],
         [InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data=f"back_to_main_{lang}")]
     ])
-    await callback.message.edit_text("⚙️ <b>Admin Boshqaruv Paneli</b>\nKerakli amalni tanlang:", reply_markup=kb, parse_mode="HTML")
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("admin_stats_"))
-async def admin_stats_handler(callback: types.CallbackQuery):
-    if callback.from_user.id not in config.ADMIN_IDS:
-        return
-    lang = callback.data.split("_")[1]
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT COUNT(*) FROM orders")
-        total_orders = cursor.fetchone()[0]
-        cursor.execute("SELECT SUM(amount) FROM orders")
-        total_sum = cursor.fetchone()[0] or 0
-    except sqlite3.OperationalError:
-        total_orders = 0
-        total_sum = 0
-    finally:
-        conn.close()
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]
-    ])
-    await callback.message.edit_text(
-        f"📊 <b>Bot Statistikasi:</b>\n\n"
-        f"• Jami buyurtmalar: <b>{total_orders} ta</b>\n"
-        f"• Jami summa: <b>{total_sum:,.0f} so'm</b>\n"
-        f"• Faol karta: <code>{config.CARD_NUMBER}</code>",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("admin_users_"))
-async def admin_users_handler(callback: types.CallbackQuery):
-    if callback.from_user.id not in config.ADMIN_IDS:
-        return
-    lang = callback.data.split("_")[1]
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0]
-    except sqlite3.OperationalError:
-        total_users = 1
-    finally:
-        conn.close()
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]
-    ])
-    await callback.message.edit_text(
-        f"👥 <b>Foydalanuvchilar:</b>\n\n"
-        f"• Ro'yxatdan o'tganlar: <b>{total_users} ta</b>",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
+    await callback.message.edit_text("⚙️ <b>Admin Boshqaruv Paneli</b>", reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
 # ===========================================================================
@@ -506,15 +468,34 @@ async def back_to_main_menu(callback: types.CallbackQuery):
         logger.error(f"Asosiy menyuga qaytishda xatolik: {e}")
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
-  # ===========================================================================
-# 14-QISM: WEB-SERVER VA ISHGA TUSHIRISH (MAIN)
+
+# ===========================================================================
+# 14-QISM: WEB-SERVER (MINI APP VA RENDER UCHUN)
 # ===========================================================================
 async def handle_ping(request):
-    return web.Response(text="Ultimate Donat Bot serveri ishlamoqda!")
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Ultimate Donat Bot Shop</title>
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #0f172a; color: #f8fafc; text-align: center; padding: 50px; }
+            h1 { color: #38bdf8; }
+            p { color: #94a3b8; }
+        </style>
+    </head>
+    <body>
+        <h1>🎮 Ultimate Donat Bot Do'koni</h1>
+        <p>Mini App do'koni faol holatda ishlamoqda!</p>
+    </body>
+    </html>
+    """
+    return web.Response(text=html_content, content_type='text/html')
 
 async def start_web_server():
     app = web.Application()
-    app.router.add_get("/", handle_ping)
+        app.router.add_get("/", handle_ping)
     runner = web.AppRunner(app)
     await runner.setup()
     
@@ -535,4 +516,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot to'xtatildi!")
-    
+        
