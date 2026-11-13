@@ -196,7 +196,7 @@ async def process_payment_decision(callback: types.CallbackQuery):
     if action == "approve":
         amount = int(parts[2]) if len(parts) > 2 else 10000
         update_user_balance(target_user_id, amount)
-                await bot.send_message(target_user_id, f"✅ To'lovingiz tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
+        await bot.send_message(target_user_id, f"✅ To'lovingiz tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
         await callback.message.edit_caption(caption=callback.message.caption + f"\n\n<b>STATUS: TASDIQLANDI (+{amount:,} so'm) ✅</b>", parse_mode="HTML")
     else:
         await bot.send_message(target_user_id, "❌ Chekingiz rad etildi.")
@@ -326,4 +326,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        pass  
+        pass
+    
