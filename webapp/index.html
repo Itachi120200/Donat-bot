@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Donat Shop</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+        }
+        h1 { font-size: 24px; text-align: center; margin-bottom: 8px; background: linear-gradient(45deg, #a855f7, #0ea5e9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        .categories { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 16px; }
+        .category-btn { background: var(--card-bg); border: 1px solid #334155; color: white; padding: 8px 16px; border-radius: 20px; white-space: nowrap; cursor: pointer; }
+        .category-btn.active { background: #3b82f6; border-color: #60a5fa; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .card { background: var(--card-bg); border-radius: 16px; padding: 14px; border: 1px solid #334155; position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+        .badge { position: absolute; top: 10px; right: 10px; background: #ef4444; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: bold; }
+        .card-icon { font-size: 32px; margin-bottom: 8px; }
+        .card-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+        .card-price { font-size: 14px; color: #38bdf8; font-weight: bold; margin-bottom: 12px; }
+        .buy-btn { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border: none; padding: 8px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; }
+        .nft-warning { font-size: 11px; color: #fbbf24; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Ultimate Donat</h1>
+    <div class="subtitle">O'yinlar va xizmatlar do'koni</div>
+
+    <div class="categories">
+        <button class="category-btn active" onclick="filterCat('all')">Barchasi</button>
+        <button class="category-btn" onclick="filterCat('Free Fire')">🔥 Free Fire</button>
+        <button class="category-btn" onclick="filterCat('PUBG Mobile')">⚡ PUBG</button>
+        <button class="category-btn" onclick="filterCat('Roblox')">💎 Roblox</button>
+        <button class="category-btn" onclick="filterCat('Telegram')">⭐ Telegram</button>
+        <button class="category-btn" onclick="filterCat('Steam')">🎮 Steam</button>
+        <button class="category-btn" onclick="filterCat('NFT')">🎨 NFT</button>
+    </div>
+
+    <div class="grid" id="product-grid"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const products = [
+            { id: 1, category: "Free Fire", name: "100 Almaz", price: "12,000 so'm", icon: "🔥", badge: "Chegirma" },
+            { id: 2, category: "PUBG Mobile", name: "60 UC", price: "14,000 so'm", icon: "⚡", badge: "Mashhur" },
+            { id: 3, category: "Roblox", name: "400 Robux", price: "55,000 so'm", icon: "💎", badge: "" },
+            { id: 4, category: "Telegram", name: "Stars (100)", price: "25,000 so'm", icon: "⭐", badge: "" },
+            { id: 5, category: "Steam", name: "Wallet $5", price: "65,000 so'm", icon: "🎮", badge: "" },
+            { id: 6, category: "NFT", name: "MRKT Exclusive #1", price: "150,000 so'm*", icon: "🎨", badge: "NFT", nft: true }
+        ];
+
+        function renderProducts(cat = 'all') {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = '';
+            const filtered = cat === 'all' ? products : products.filter(p => p.category === cat);
+            filtered.forEach(p => {
+                grid.innerHTML += `
+                    <div class="card">
+                        ${p.badge ? `<div class="badge">${p.badge}</div>` : ''}
+                        <div>
+                            <div class="card-icon">${p.icon}</div>
+                            <div class="card-title">${p.name}</div>
+                            <div class="card-price">${p.price}</div>
+                            ${p.nft ? '<div class="nft-warning">Narx taxminiy, admin tasdiqlaydi</div>' : ''}
+                        </div>
+                        <button class="buy-btn" onclick="buyItem('${p.name}')">Sotib olish</button>
+                    </div>
+                `;
+            });
+        }
+
+        function filterCat(cat) {
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderProducts(cat);
+        }
+
+        function buyItem(name) {
+            tg.sendData(JSON.stringify({action: "buy", product: name}));
+            tg.close();
+        }
+
+        renderProducts();
+    </script>
+</body>
+</html>
