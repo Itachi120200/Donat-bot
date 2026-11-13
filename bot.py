@@ -105,8 +105,9 @@ async def get_main_menu(user_id: int, lang: str):
         btn_prices = "💰 Price List"
         btn_admin = "⚙️ Admin Panel"
 
+    # Render manzili to'g'ridan-to'g'ri Mini App'ga ulandi
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=btn_shop, web_app=WebAppInfo(url="https://sizning-sayt.uz/webapp/index.html"))],
+        [InlineKeyboardButton(text=btn_shop, web_app=WebAppInfo(url="https://donat-bot-cl4x.onrender.com"))],
         [
             InlineKeyboardButton(text=btn_orders, callback_data=f"orders_{lang}"),
             InlineKeyboardButton(text=btn_help, callback_data=f"help_{lang}")
@@ -412,4 +413,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot to'xtatildi!")
-        
