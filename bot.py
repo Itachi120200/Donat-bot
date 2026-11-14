@@ -2,13 +2,18 @@ import asyncio
 import logging
 import sqlite3
 from os import getenv
+from pathlib import Path
+
 from aiohttp import web
-import aiohttp
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 import config
+
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = str(BASE_DIR / "bot_database.db")
+WEBAPP_URL = "https://donat-bot-cl4x.onrender.com"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,8 +24,9 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
+
 def init_db():
-    conn = sqlite3.connect('bot_database.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -50,8 +56,10 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def get_db():
-    return sqlite3.connect('bot_database.db')
+    return sqlite3.connect(DB_PATH)
+
 
 def register_user(user_id: int, username: str, full_name: str):
     conn = get_db()
@@ -67,6 +75,7 @@ def register_user(user_id: int, username: str, full_name: str):
     finally:
         conn.close()
 
+
 def get_user_balance(user_id: int) -> int:
     conn = get_db()
     cursor = conn.cursor()
@@ -75,12 +84,14 @@ def get_user_balance(user_id: int) -> int:
     conn.close()
     return res[0] if res else 0
 
+
 def update_user_balance(user_id: int, amount: int):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
     conn.commit()
     conn.close()
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -101,12 +112,13 @@ async def cmd_start(message: types.Message):
         reply_markup=kb, parse_mode="HTML"
     )
 
+
 async def get_main_menu(user_id: int, lang: str):
     balance = get_user_balance(user_id)
     if lang == "uz":
         text = (
             f"👋 Assalomu alaykum!\n\n"
-            f"💰 **Sizning balansingiz:** <code>{balance:,} so'm</code>\n\n"
+            f"💰 <b>Sizning balansingiz:</b> <code>{balance:,} so'm</code>\n\n"
             "🎮 <b>Ultimate Donat Bot</b>ga xush kelibsiz. O'yinlar va xizmatlarni xarid qiling.\n\n"
             "📦 Buyurtma berish uchun pastdagi Mini App do'konidan foydalaning:"
         )
@@ -116,7 +128,7 @@ async def get_main_menu(user_id: int, lang: str):
     elif lang == "ru":
         text = (
             f"👋 Здравствуйте!\n\n"
-            f"💰 **Ваш баланс:** <code>{balance:,} сум</code>\n\n"
+            f"💰 <b>Ваш баланс:</b> <code>{balance:,} сум</code>\n\n"
             "🎮 Добро пожаловать в <b>Ultimate Donat Bot</b>.\n\n"
             "📦 Используйте магазин Mini App ниже для заказа:"
         )
@@ -126,7 +138,7 @@ async def get_main_menu(user_id: int, lang: str):
     else:
         text = (
             f"👋 Hello!\n\n"
-            f"💰 **Your Balance:** <code>{balance:,} UZS</code>\n\n"
+            f"💰 <b>Your Balance:</b> <code>{balance:,} UZS</code>\n\n"
             "🎮 Welcome to <b>Ultimate Donat Bot</b>.\n\n"
             "📦 Use the Mini App store below to place an order:"
         )
@@ -135,13 +147,14 @@ async def get_main_menu(user_id: int, lang: str):
         )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=btn_shop, web_app=WebAppInfo(url="https://donat-bot-cl4x.onrender.com"))],
+        [InlineKeyboardButton(text=btn_shop, web_app=WebAppInfo(url=WEBAPP_URL))],
         [InlineKeyboardButton(text=btn_orders, callback_data=f"orders_{lang}"), InlineKeyboardButton(text=btn_topup, callback_data=f"topup_{lang}")],
         [InlineKeyboardButton(text=btn_prices, callback_data=f"prices_{lang}"), InlineKeyboardButton(text=btn_help, callback_data=f"help_{lang}")]
     ])
     if user_id in config.ADMIN_IDS:
         kb.inline_keyboard.append([InlineKeyboardButton(text=btn_admin, callback_data=f"admin_{lang}")])
     return text, kb
+
 
 @dp.callback_query(F.data.startswith("lang_"))
 async def set_language(callback: types.CallbackQuery):
@@ -153,28 +166,30 @@ async def set_language(callback: types.CallbackQuery):
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
+
 @dp.callback_query(F.data.startswith("topup_"))
 async def topup_handler(callback: types.CallbackQuery):
     lang = callback.data.split("_")[1]
     if lang == "uz":
-        text = f"💳 **Balansni to'ldirish:**\n\n1. Karta: <code>{config.CARD_NUMBER}</code>\nEgasi: <b>{config.CARD_HOLDER}</b>\n\n2. Chek rasmini yuboring."
+        text = f"💳 <b>Balansni to'ldirish:</b>\n\n1. Karta: <code>{config.CARD_NUMBER}</code>\nEgasi: <b>{config.CARD_HOLDER}</b>\n\n2. Chek rasmini yuboring."
         back_text = "🔙 Orqaga"
     elif lang == "ru":
-        text = f"💳 **Пополнение баланса:**\n\n1. Карта: <code>{config.CARD_NUMBER}</code>\nВладелец: <b>{config.CARD_HOLDER}</b>\n\n2. Отправьте скрин чека."
+        text = f"💳 <b>Пополнение баланса:</b>\n\n1. Карта: <code>{config.CARD_NUMBER}</code>\nВладелец: <b>{config.CARD_HOLDER}</b>\n\n2. Отправьте скрин чека."
         back_text = "🔙 Назад"
     else:
-        text = f"💳 **Top up:**\n\n1. Card: <code>{config.CARD_NUMBER}</code>\nHolder: <b>{config.CARD_HOLDER}</b>\n\n2. Send receipt."
+        text = f"💳 <b>Top up:</b>\n\n1. Card: <code>{config.CARD_NUMBER}</code>\nHolder: <b>{config.CARD_HOLDER}</b>\n\n2. Send receipt."
         back_text = "🔙 Back"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=back_text, callback_data=f"back_to_main_{lang}")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
+
 @dp.message(F.photo)
 async def handle_receipt_photo(message: types.Message):
     user = message.from_user
     photo_id = message.photo[-1].file_id
-    caption = f"📥 **Yangi chek!**\n\n• Kimdan: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n• ID: <code>{user.id}</code>"
+    caption = f"📥 <b>Yangi chek!</b>\n\n• Kimdan: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n• ID: <code>{user.id}</code>"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Tasdiqlash (+10,000)", callback_data=f"approve_{user.id}_10000"), InlineKeyboardButton(text="(+50,000)", callback_data=f"approve_{user.id}_50000")],
         [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{user.id}")]
@@ -182,9 +197,10 @@ async def handle_receipt_photo(message: types.Message):
     for admin_id in config.ADMIN_IDS:
         try:
             await bot.send_photo(chat_id=admin_id, photo=photo_id, caption=caption, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Adminga yuborib bo'lmadi ({admin_id}): {e}")
     await message.answer("✅ Chek adminga yuborildi!")
+
 
 @dp.callback_query(F.data.startswith("approve_") | F.data.startswith("reject_"))
 async def process_payment_decision(callback: types.CallbackQuery):
@@ -197,11 +213,12 @@ async def process_payment_decision(callback: types.CallbackQuery):
         amount = int(parts[2]) if len(parts) > 2 else 10000
         update_user_balance(target_user_id, amount)
         await bot.send_message(target_user_id, f"✅ To'lovingiz tasdiqlandi! Balansingizga <b>{amount:,} so'm</b> qo'shildi.", parse_mode="HTML")
-        await callback.message.edit_caption(caption=callback.message.caption + f"\n\n<b>STATUS: TASDIQLANDI (+{amount:,} so'm) ✅</b>", parse_mode="HTML")
+        await callback.message.edit_caption(caption=callback.message.caption + f"\n\nSTATUS: TASDIQLANDI (+{amount:,} so'm) ✅")
     else:
         await bot.send_message(target_user_id, "❌ Chekingiz rad etildi.")
-        await callback.message.edit_caption(caption=callback.message.caption + "\n\n<b>STATUS: RAD ETILDI ❌</b>", parse_mode="HTML")
+        await callback.message.edit_caption(caption=callback.message.caption + "\n\nSTATUS: RAD ETILDI ❌")
     await callback.answer("Bajarildi!")
+
 
 @dp.callback_query(F.data.startswith("orders_"))
 async def my_orders_handler(callback: types.CallbackQuery):
@@ -215,26 +232,29 @@ async def my_orders_handler(callback: types.CallbackQuery):
         orders = []
     finally:
         conn.close()
-    text = "📦 **Buyurtmalaringiz:**\n\n" if orders else "📦 Buyurtmalar yo'q."
+    text = "📦 <b>Buyurtmalaringiz:</b>\n\n" if orders else "📦 Buyurtmalar yo'q."
     for o in orders:
         text += f"• ID: <code>{o[0]}</code> | {o[1]} | {o[2]} so'm | <b>{o[3]}</b>\n"
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"back_to_main_{lang}")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
+
 @dp.callback_query(F.data.startswith("help_"))
 async def help_handler(callback: types.CallbackQuery):
     lang = callback.data.split("_")[1]
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"back_to_main_{lang}")]])
-    await callback.message.edit_text("ℹ️ **Yordam markazi:**\n📞 @evelineee_00", reply_markup=kb, parse_mode="HTML")
+    await callback.message.edit_text("ℹ️ <b>Yordam markazi:</b>\n📞 @evelineee_00", reply_markup=kb, parse_mode="HTML")
     await callback.answer()
+
 
 @dp.callback_query(F.data.startswith("prices_"))
 async def prices_handler(callback: types.CallbackQuery):
     lang = callback.data.split("_")[1]
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"back_to_main_{lang}")]])
-    await callback.message.edit_text("💰 **Narxlar:**\n• Telegram Premium (1 oy) — 40,000 so'm", reply_markup=kb, parse_mode="HTML")
+    await callback.message.edit_text("💰 <b>Narxlar:</b>\n• Telegram Premium (1 oy) — 40,000 so'm", reply_markup=kb, parse_mode="HTML")
     await callback.answer()
+
 
 @dp.callback_query(F.data.startswith("admin_"))
 async def admin_panel_handler(callback: types.CallbackQuery):
@@ -259,7 +279,7 @@ async def admin_panel_handler(callback: types.CallbackQuery):
             conn.close()
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]])
         await callback.message.edit_text(
-            f"📊 **Statistika:**\n\n• Buyurtmalar: <b>{total_orders} ta</b>\n• Jami summa: <b>{total_sum:,.0f} so'm</b>\n• Balanslar yig'indisi: <b>{total_balance:,.0f} so'm</b>",
+            f"📊 <b>Statistika:</b>\n\n• Buyurtmalar: <b>{total_orders} ta</b>\n• Jami summa: <b>{total_sum:,.0f} so'm</b>\n• Balanslar yig'indisi: <b>{total_balance:,.0f} so'm</b>",
             reply_markup=kb, parse_mode="HTML"
         )
         await callback.answer()
@@ -271,11 +291,11 @@ async def admin_panel_handler(callback: types.CallbackQuery):
             cursor.execute("SELECT COUNT(*) FROM users")
             total_users = cursor.fetchone()[0]
         except Exception:
-            total_users = 1
+            total_users = 0
         finally:
             conn.close()
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_{lang}")]])
-        await callback.message.edit_text(f"👥 **Foydalanuvchilar:** <b>{total_users} ta</b>", reply_markup=kb, parse_mode="HTML")
+        await callback.message.edit_text(f"👥 <b>Foydalanuvchilar:</b> <b>{total_users} ta</b>", reply_markup=kb, parse_mode="HTML")
         await callback.answer()
         return
 
@@ -286,6 +306,7 @@ async def admin_panel_handler(callback: types.CallbackQuery):
     ])
     await callback.message.edit_text("⚙️ <b>Admin Panel</b>", reply_markup=kb, parse_mode="HTML")
     await callback.answer()
+
 
 @dp.callback_query(F.data.startswith("back_to_main_"))
 async def back_to_main_menu(callback: types.CallbackQuery):
@@ -298,17 +319,29 @@ async def back_to_main_menu(callback: types.CallbackQuery):
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
-async def handle_ping(request):
-    try:
-        return aiohttp.web.FileResponse('index.html')
-    except Exception:
-        return web.Response(text="Do'kon sahifasi yuklanmoqda...", content_type='text/html')
+
+# ---------------- Mini App veb-server ----------------
+
+async def handle_index(request):
+    for p in (BASE_DIR / "index.html", BASE_DIR / "webapp" / "index.html"):
+        if p.exists():
+            return web.FileResponse(p)
+    logger.error("index.html topilmadi: %s", BASE_DIR)
+    return web.Response(text="index.html topilmadi", status=404)
+
+
+async def handle_health(request):
+    return web.Response(text="OK")
+
 
 async def start_web_server():
     app = web.Application()
-    app.router.add_get("/", handle_ping)
-    app.router.add_get("/shop", handle_ping)
-    
+    app.router.add_get("/", handle_index)
+    app.router.add_get("/shop", handle_index)
+    app.router.add_get("/health", handle_health)
+    if (BASE_DIR / "webapp").exists():
+        app.router.add_static("/webapp/", BASE_DIR / "webapp")
+
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(getenv("PORT", 8080))
@@ -316,15 +349,16 @@ async def start_web_server():
     await site.start()
     logger.info(f"Web server {port}-portda ishga tushdi.")
 
+
 async def main():
     init_db()
-    asyncio.create_task(start_web_server())
+    await start_web_server()
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         pass
-    
